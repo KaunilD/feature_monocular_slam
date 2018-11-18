@@ -7,22 +7,18 @@ MP4 = 'data/videos/1.mp4'
 ROWS = 1920//2
 COLS = 1080//2
 orb = cv2.ORB_create()
+F = 1
+# intrinsic params of an essential matrix
+K = np.array(([F, 0, ROWS], [0, F, COLS], [0, 0, 1]))
 
-"""
-    Process every frame here.
-    1. Idenfify the features in the images.
-    2.
-
-"""
 def process_frame(frame, feature_extractor):
     frame = cv2.resize(frame, (ROWS, COLS))
     matches = feature_extractor.extract(frame)
     if matches is None:
         return frame
     for p1, p2 in matches:
-        u1, v1 = map(lambda x: int(round(x)), p1)
-        u2, v2 = map(lambda x: int(round(x)), p2)
-        
+        u1, v1 = feature_extractor.denormalize(p1)
+        u2, v2 = feature_extractor.denormalize(p2)
         cv2.circle(
             frame, (u1, v1), color=(0, 0, 255), radius = 2
         )
@@ -35,7 +31,7 @@ def process_frame(frame, feature_extractor):
 if __name__ == '__main__':
     frame_idx = 0
     video_cap = cv2.VideoCapture(MP4)
-    feature_extractor = FeatureExtractor()
+    feature_extractor = FeatureExtractor(K)
     while video_cap.isOpened():
         ret, frame = video_cap.read()
         if ret:

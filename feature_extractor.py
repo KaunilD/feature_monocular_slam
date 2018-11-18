@@ -2,15 +2,31 @@ import cv2
 import numpy as np
 from skimage.measure import ransac
 from skimage.transform import FundamentalMatrixTransform
+from skimage.transform import EssentialMatrixTransform
+
 
 class FeatureExtractor:
-    def __init__(self):
+    def __init__(self, K):
         self.orb = cv2.ORB_create()
         self.last = None
         self.bf_matcher = cv2.BFMatcher(
             cv2.NORM_HAMMING
         )
+
+        self.K = K
+        self.Kinv = np.linalg.inv(K)
         print('FeatureExtractor: initialized feature extractor')
+
+    def add_ones(self, x):
+        return np.concatenate([x, np.ones((x.shape[0], 1))], axis = 1)
+
+    def normalize(self, point):
+        return np.dot(self.Kinv, self.add_ones(point).T).T[:, 0:2]
+
+
+    def denormalize(self, point):
+        denorm = np.dot(self.K, [point[0], point[1], 1.0])
+        return int(round(denorm[0])), int(round(denorm[1]))
 
     def extract(self, image):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -43,9 +59,11 @@ class FeatureExtractor:
                     keypoint_2 = self.last['keypoints'][m.trainIdx].pt
                     ret.append((keypoint_1, keypoint_2))
 
+
         if len(ret) > 0:
             ret = np.array(ret)
-
+            ret[:, 0, :] = self.normalize(ret[:, 0, :])
+            ret[:, 1, :] = self.normalize(ret[:, 1, :])
             model, inliers = ransac(
                                 (ret[:, 0], ret[:, 1]),
                                 FundamentalMatrixTransform,
@@ -53,5 +71,9 @@ class FeatureExtractor:
                                 max_trials = 100
                             )
             ret = ret[inliers]
+            # use svd for conputing r and t from E
+            r, e, t = np.linalg.svd(model.params)
+            print(e)
         self.last = {'keypoints': keypoints, 'descriptors': descriptors}
+        # p rint('FEATUREEXTRACTOR: matches: {}'.format(len(ret)))
         return ret
