@@ -23,7 +23,6 @@ class FeatureExtractor:
     def normalize(self, point):
         return np.dot(self.Kinv, self.add_ones(point).T).T[:, 0:2]
 
-
     def denormalize(self, point):
         denorm = np.dot(self.K, [point[0], point[1], 1.0])
         return int(round(denorm[0])), int(round(denorm[1]))
@@ -48,6 +47,7 @@ class FeatureExtractor:
         keypoints, descriptors = self.orb.compute(image, keypoints)
 
         ret = []
+        R, t = None, None
         if self.last is not None:
             matches = self.bf_matcher.knnMatch(
                         descriptors,
@@ -59,7 +59,7 @@ class FeatureExtractor:
                     keypoint_2 = self.last['keypoints'][m.trainIdx].pt
                     ret.append((keypoint_1, keypoint_2))
 
-
+        self.last = {'keypoints': keypoints, 'descriptors': descriptors}
         if len(ret) > 0:
             ret = np.array(ret)
             ret[:, 0, :] = self.normalize(ret[:, 0, :])
@@ -67,13 +67,28 @@ class FeatureExtractor:
             model, inliers = ransac(
                                 (ret[:, 0], ret[:, 1]),
                                 FundamentalMatrixTransform,
-                                min_samples = 8, residual_threshold  = 1,
+                                min_samples = 8, residual_threshold  = 3,
                                 max_trials = 100
                             )
             ret = ret[inliers]
-            # use svd for conputing r and t from E
-            r, e, t = np.linalg.svd(model.params)
-            print(e)
-        self.last = {'keypoints': keypoints, 'descriptors': descriptors}
-        # p rint('FEATUREEXTRACTOR: matches: {}'.format(len(ret)))
-        return ret
+
+            R, t = self.calc_pose_matrices(model)
+
+        # print('FEATUREEXTRACTOR: matches: {}'.format(len(ret)))
+        return ret, (R, t)
+
+    def calc_pose_matrices(self, model):
+        W = np.mat([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=np.float)
+        U, w, V = np.linalg.svd(model.params)
+
+        assert np.linalg.det(U) > 0
+
+        if np.linalg.det(V) < 0:
+            V *= -1.0
+
+        R = np.dot(np.dot(U, W), V)
+
+        if np.sum(R.diagonal()) < 0:
+            R = np.dot(np.dot(U, W.T), V)
+        t = U[:, 2]
+        return R, t
