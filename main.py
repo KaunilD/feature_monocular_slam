@@ -16,11 +16,19 @@ orb = cv2.ORB_create()
 """
 def process_frame(frame, feature_extractor):
     frame = cv2.resize(frame, (ROWS, COLS))
-    keypoints, descriptors = feature_extractor.extract(frame)
-    for kp in keypoints:
-        u, v = map(lambda x: int(round(x)), kp.pt)
+    matches = feature_extractor.extract(frame)
+    if matches is None:
+        return frame
+    for p1, p2 in matches:
+        u1, v1 = map(lambda x: int(round(x)), p1)
+        u2, v2 = map(lambda x: int(round(x)), p2)
+        
         cv2.circle(
-            frame, (u, v), color=(0, 0, 255), radius = 2
+            frame, (u1, v1), color=(0, 0, 255), radius = 2
+        )
+
+        cv2.line(
+            frame, (u1, v1), (u2, v2), color=(0, 255, 0)
         )
     return frame
 
