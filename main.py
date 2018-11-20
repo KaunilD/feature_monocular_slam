@@ -1,11 +1,17 @@
+#!/usr/bin/env python3
+import os
+import sys
+sys.path.append('lib/')
+import g2o
 import numpy as np
 import cv2
 from feature_extractor import FeatureExtractor
 
+
 MP4 = 'data/videos/1.mp4'
 
-ROWS = 1920//4
-COLS = 1080//4
+ROWS = 1920//2
+COLS = 1080//2
 F = 1
 K = np.array(([F, 0, ROWS], [0, F, COLS], [0, 0, 1]))
 
