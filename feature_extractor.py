@@ -5,6 +5,9 @@ from skimage.transform import FundamentalMatrixTransform
 from skimage.transform import EssentialMatrixTransform
 
 
+IRt = np.eye(4)
+
+
 def extract(image):
     orb = cv2.ORB_create()
     features = cv2.goodFeaturesToTrack(
@@ -36,30 +39,39 @@ def denormalize(K, point):
     denorm/=denorm[2]
     return int(round(denorm[0])), int(round(denorm[1]))
 
-def match(f1, f2):
+def match_frames(f1, f2):
     bf = cv2.BFMatcher(cv2.NORM_HAMMING)
 
     matches = bf.knnMatch(f1.des, f2.des, k=2)
     ret = []
+    idx1 = []
+    idx2 = []
     for m, n in matches:
         if m.distance < 0.75*n.distance:
+            idx1.append(m.queryIdx)
+            idx2.append(m.trainIdx)
             keypoint_1 = f1.points[m.queryIdx]
             keypoint_2 = f2.points[m.trainIdx]
             ret.append((keypoint_1, keypoint_2))
     assert len(ret) > 8
+
     ret = np.array(ret)
+    idx1 = np.array(idx1)
+    idx2 = np.array(idx2)
+
     model, inliers = ransac(
                         (ret[:, 0], ret[:, 1]),
-                        FundamentalMatrixTransform,
-                        min_samples = 8, residual_threshold  = 3,
-                        max_trials = 100
+                        EssentialMatrixTransform,
+                        min_samples = 8, residual_threshold  = 0.005,
+                        max_trials = 200
                     )
-    ret = ret[inliers]
+    points = ret[inliers]
 
-    R, t = calc_pose_matrices(model)
+    Rt = calc_pose_matrices(model)
 
     # print('FEATUREEXTRACTOR: matches: {}'.format(len(ret)))
-    return ret, (R, t)
+    return idx1[inliers], idx2[inliers], Rt
+
 
 def calc_pose_matrices(model):
     W = np.mat([[0, -1, 0], [1, 0, 0], [0, 0, 1]], dtype=np.float)
@@ -75,13 +87,16 @@ def calc_pose_matrices(model):
     if np.sum(R.diagonal()) < 0:
         R = np.dot(np.dot(U, W.T), V)
     t = U[:, 2]
-    return R, t
+    ret = np.eye(4)
+    ret[:3, :3] = R
+    ret[:3, 3] = t
+    return ret
 
 class Frame(object):
     def __init__(self, img, K):
 
         self.K = K
         self.Kinv = np.linalg.inv(self.K)
-
+        self.pose = IRt
         points, self.des = extract(img)
         self.points = normalize(self.Kinv, points)
