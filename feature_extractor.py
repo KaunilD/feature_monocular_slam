@@ -93,10 +93,11 @@ def calc_pose_matrices(model):
     return ret
 
 class Frame(object):
-    def __init__(self, img, K):
+    def __init__(self, img, K, global_map):
 
         self.K = K
         self.Kinv = np.linalg.inv(self.K)
         self.pose = IRt
         points, self.des = extract(img)
         self.points = normalize(self.Kinv, points)
+        self.id = len(global_map.frames)
