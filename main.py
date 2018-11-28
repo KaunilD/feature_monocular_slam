@@ -11,8 +11,8 @@ import OpenGL.GL as gl
 
 from multiprocessing import Process, Queue
 
-MP4 = 'data/videos/1.mp4'
-W, H = 1920//2, 1080//2
+MP4 = 'data/videos/output.mp4'
+W, H = 1238, 374
 F = 270
 K = np.array(([F, 0, W//2], [0, F, H//2], [0, 0, 1]))
 
@@ -29,44 +29,41 @@ class Map(object):
         p.start()
 
     def viewer_thread(self, q):
-        self.viewer_init()
+        self.viewer_init(W*2, H*2)
         while True:
             self.viewer_refresh(q)
 
-    def viewer_init(self):
-        pangolin.CreateWindowAndBind('Main', 640, 480)
+    def viewer_init(self, w, h):
+        pangolin.CreateWindowAndBind('Main', w, h)
         gl.glEnable(gl.GL_DEPTH_TEST)
 
         self.scam = pangolin.OpenGlRenderState(
-            pangolin.ProjectionMatrix(640, 480, 420, 420, 320, 240, 0.2, 100),
-            pangolin.ModelViewLookAt(-2, 2, -2, 0, 0, 0, pangolin.AxisDirection.AxisY)
+            pangolin.ProjectionMatrix(w, h, 420, 420, w//2, h//2, 0.1, 100),
+            pangolin.ModelViewLookAt(0, -10, -20, 0, 0, 0, 0, -1, 0)
         )
 
         self.handler = pangolin.Handler3D(self.scam)
 
         self.dcam = pangolin.CreateDisplay()
-        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -640.0/480.0)
+        self.dcam.SetBounds(0.0, 1.0, 0.0, 1.0, -w/h)
         self.dcam.SetHandler(self.handler)
 
     def viewer_refresh(self, q):
         if self.state is None or not q.empty():
             self.state = q.get()
 
-        ppts = np.array([d[:3, 3] for d in self.state[0]])
-
-        spts = np.array(self.state[1])
         gl.glClear(gl.GL_COLOR_BUFFER_BIT | gl.GL_DEPTH_BUFFER_BIT)
-        gl.glClearColor(1.0, 1.0, 1.0, 1.0)
+        gl.glClearColor(0.0, 0.0, 0.0, 0.0)
         self.dcam.Activate(self.scam)
 
-        gl.glPointSize(10)
-        gl.glColor3f(0.0, 1.0, 0.0)
-        pangolin.DrawPoints(ppts)
 
-        if len(spts.shape) >=2:
-            gl.glPointSize(2)
-            gl.glColor3f(1.0, 0.0, 0.0)
-            pangolin.DrawPoints(spts)
+        gl.glColor3f(1.0, 0.0, 0.0)
+        pangolin.DrawCameras(self.state[0])
+
+        gl.glPointSize(2.0)
+        gl.glColor3f(0.0, 1.0, 0.0)
+        if len(np.array(self.state[1]).shape) == 2:
+            pangolin.DrawPoints(self.state[1])
 
         pangolin.FinishFrame()
 
@@ -161,6 +158,5 @@ if __name__ == '__main__':
         cv2.imshow('slam', frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
-
     video_cap.release()
     cv2.destroyAllWindows()
