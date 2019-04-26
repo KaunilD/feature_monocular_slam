@@ -1,5 +1,6 @@
 # feature_monocular_slam
-Feature based SLAM on 3D RGB images.
+Feature based Monocular SLAM on RGB images.
+
 
 
 //Path to a program.

@@ -49,9 +49,6 @@ class Map(object):
         gl.glClearColor(0.0, 0.0, 0.0, 0.0)
         self.dcam.Activate(self.scam)
 
-        print(self.state[1])
-
-
         gl.glColor3f(1.0, 0.0, 0.0)
         pangolin.DrawCameras(self.state[0])
 
