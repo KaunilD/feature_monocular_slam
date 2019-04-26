@@ -5,7 +5,7 @@ sys.path.append('./lib')
 import g2o
 import numpy as np
 import cv2
-from feature_extractor import Frame, denormalize, match_frames, IRt
+from feature_extractor import Frame, denormalize, match_frames
 import OpenGL.GL as gl
 from point import Point
 from map import Map
@@ -21,6 +21,10 @@ W, H = 1920//2, 1080//2
 
 F = 800
 K = np.array(([F, 0, W//2], [0, F, H//2], [0, 0, 1]))
+Kinv = np.linalg.inv(K)
+global_map = Map(W, H)
+global_map.create_display()
+
 
 def triangulate(pose1, pose2, points1, points2):
     ret = np.zeros((points1.shape[0], 4))
@@ -37,8 +41,6 @@ def triangulate(pose1, pose2, points1, points2):
     return ret
 
 
-global_map = Map(W, H)
-global_map.create_display()
 
 def process_frame(img):
     img = cv2.resize(img, (W, H))
@@ -54,11 +56,11 @@ def process_frame(img):
     f2 = global_map.frames[-2]
 
     idx1, idx2, Rt = match_frames(f1, f2)
-    f1.pose = np.dot(f2.pose, Rt)
+    f1.pose = np.dot(Rt, f2.pose)
 
-    for i in range(len(f2.points)):
-        if f2.points is not None:
-            f2.points
+    for i, idx in enumerate(idx2):
+        if f2.points[idx] is not None:
+            f2.points[idx].add_obervation(f1, idx1[i])
 
 
 
@@ -68,14 +70,13 @@ def process_frame(img):
         )
     points4d /= points4d[:, 3:]
 
-    unmatched_points = np.array([f1.points[i] is None for i in idx1]).astype(np.bool)
+    unmatched_points = np.array([f1.points[i] is None for i in idx1])
     good_points4d = (np.abs(points4d[:, 3]) > 0.005) & (points4d[:, 2] > 0) & unmatched_points
 
     for idx, point in enumerate(points4d):
         if not good_points4d[idx]:
             continue
         p = Point(point, global_map)
-        global_map.points.append(p)
         p.add_obervation(f1, idx1[idx])
         p.add_obervation(f2, idx2[idx])
 
@@ -89,7 +90,11 @@ def process_frame(img):
         cv2.line(
             img, (u1, v1), (u2, v2), color=(0, 255, 0)
         )
+
+    if frame.id >=4:
+        global_map.optimize()
     global_map.display()
+
     return img
 
 if __name__ == '__main__':
