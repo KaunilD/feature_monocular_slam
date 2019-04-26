@@ -7,21 +7,20 @@ from skimage.transform import EssentialMatrixTransform
 
 IRt = np.eye(4)
 
-
 def extract(image):
     orb = cv2.ORB_create()
     features = cv2.goodFeaturesToTrack(
                     image,
-                    qualityLevel = 0.01,
-                    maxCorners = 3000,
-                    minDistance = 3
+                    1000,
+                    qualityLevel=0.01,
+                    minDistance=7
                 )
 
     keypoints = [
             cv2.KeyPoint(
                 x = feature[0][0],
                 y = feature[0][1],
-                _size = 30
+                _size = 20
             ) for feature in features
     ]
     keypoints, descriptors = orb.compute(image, keypoints)
@@ -43,17 +42,21 @@ def match_frames(f1, f2):
     bf = cv2.BFMatcher(cv2.NORM_HAMMING)
 
     matches = bf.knnMatch(f1.des, f2.des, k=2)
+
     ret = []
     idx1 = []
     idx2 = []
+
     for m, n in matches:
         if m.distance < 0.75*n.distance:
-            idx1.append(m.queryIdx)
-            idx2.append(m.trainIdx)
-            keypoint_1 = f1.points[m.queryIdx]
-            keypoint_2 = f2.points[m.trainIdx]
-            ret.append((keypoint_1, keypoint_2))
-    assert len(ret) > 8
+            keypoint_1 = f1.key_points[m.queryIdx]
+            keypoint_2 = f2.key_points[m.trainIdx]
+            if np.linalg.norm((keypoint_1-keypoint_2)) < 0.1*np.linalg.norm([f1.w, f1.h]) \
+            and m.distance < 32:
+                idx1.append(m.queryIdx)
+                idx2.append(m.trainIdx)
+                ret.append((keypoint_1, keypoint_2))
+    assert len(ret) >= 8
 
     ret = np.array(ret)
     idx1 = np.array(idx1)
@@ -61,9 +64,9 @@ def match_frames(f1, f2):
 
     model, inliers = ransac(
                         (ret[:, 0], ret[:, 1]),
-                        EssentialMatrixTransform,
-                        min_samples = 8, residual_threshold  = 0.005,
-                        max_trials = 200
+                        FundamentalMatrixTransform,
+                        min_samples = 8, residual_threshold  = 0.001,
+                        max_trials = 100
                     )
     points = ret[inliers]
 
@@ -97,7 +100,13 @@ class Frame(object):
 
         self.K = K
         self.Kinv = np.linalg.inv(self.K)
+
         self.pose = IRt
+
         points, self.des = extract(img)
-        self.points = normalize(self.Kinv, points)
+        self.h, self.w = img.shape[0:2]
+        self.key_points = normalize(self.Kinv, points)
+        self.points = [None]*len(self.key_points)
+
         self.id = len(global_map.frames)
+        global_map.frames.append(self)

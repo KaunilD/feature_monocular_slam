@@ -19,21 +19,33 @@ MP4 = 'data/videos/5.mp4'
 W, H = 1920//2, 1080//2
 
 
-F = 270
+F = 800
 K = np.array(([F, 0, W//2], [0, F, H//2], [0, 0, 1]))
 
 def triangulate(pose1, pose2, points1, points2):
-    return cv2.triangulatePoints(pose1[:3], pose2[:3], points1.T, points2.T).T
+    ret = np.zeros((points1.shape[0], 4))
+    pose1 = np.linalg.inv(pose1)
+    pose2 = np.linalg.inv(pose2)
+    for i, p in enumerate(zip(points1, points2)):
+        A = np.zeros((4,4))
+        A[0] = p[0][0] * pose1[2] - pose1[0]
+        A[1] = p[0][1] * pose1[2] - pose1[1]
+        A[2] = p[1][0] * pose2[2] - pose2[0]
+        A[3] = p[1][1] * pose2[2] - pose2[1]
+        _, _, vt = np.linalg.svd(A)
+        ret[i] = vt[3]
+    return ret
 
 
 global_map = Map(W, H)
+global_map.create_display()
 
 def process_frame(img):
     img = cv2.resize(img, (W, H))
     img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
     frame = Frame(img_gray, K, global_map)
-    global_map.frames.append(frame)
+
 
     if len(global_map.frames) <= 1:
         return img
@@ -44,15 +56,20 @@ def process_frame(img):
     idx1, idx2, Rt = match_frames(f1, f2)
     f1.pose = np.dot(f2.pose, Rt)
 
+    for i in range(len(f2.points)):
+        if f2.points is not None:
+            f2.points
+
+
 
     points4d = triangulate(
         f1.pose, f2.pose,
-        f1.points[idx1], f2.points[idx2]
+        f1.key_points[idx1], f2.key_points[idx2]
         )
     points4d /= points4d[:, 3:]
-    good_points4d = (np.abs(points4d[:, 3]) > 0.005) & (points4d[:, 2] > 0)
 
-    points4d = points4d[good_points4d]
+    unmatched_points = np.array([f1.points[i] is None for i in idx1]).astype(np.bool)
+    good_points4d = (np.abs(points4d[:, 3]) > 0.005) & (points4d[:, 2] > 0) & unmatched_points
 
     for idx, point in enumerate(points4d):
         if not good_points4d[idx]:
@@ -63,7 +80,7 @@ def process_frame(img):
         p.add_obervation(f2, idx2[idx])
 
 
-    for p1, p2 in zip(f1.points[idx1], f2.points[idx2]):
+    for p1, p2 in zip(f1.key_points[idx1], f2.key_points[idx2]):
         u1, v1 = denormalize(K, p1)
         u2, v2 = denormalize(K, p2)
         cv2.circle(
