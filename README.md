@@ -10,7 +10,8 @@
 ```
 python main.py
 ```
-Let the slam system run for a few frames or 5 minutes. The posegraph and pointcloud will be rendered in the pangolin viewer.
+Let the slam system run for a few frames or 5 minutes. The posegraph and pointcloud will be rendered in the pangolin viewer. (click the image to watch it live)
+
 [![posegraph](https://github.com/KaunilD/feature_monocular_slam/blob/master/res/screen.png)](https://vimeo.com/303207923)
 
 
